@@ -10,28 +10,22 @@ python-multipart==0.0.12
 langchain==0.3.14
 langchain-core==0.3.47
 langchain-community==0.3.14
-langchain-openai==0.3.9
+langchain-google-genai==2.0.10
 langchain-chroma==0.2.2
 
-# ── Vector Database ─────────────────────────────────────────────
+# ── Vector Database ────────────────────────────────────────────
 chromadb==0.6.3
 
-# ── OpenAI — let pip pick a compatible version ──────────────────
-openai>=1.68.0
-
-# ── Hybrid Search ───────────────────────────────────────────────
+# ── Hybrid Search ──────────────────────────────────────────────
 rank_bm25==0.2.2
 
-# ── Tokenizer ───────────────────────────────────────────────────
-tiktoken>=0.8.0
-
-# ── Video Transcript ────────────────────────────────────────────
+# ── Video Transcript ──────────────────────────────────────────
 youtube-transcript-api==1.2.4
 
-# ── Reranker (optional) ─────────────────────────────────────────
+# ── Reranker (optional) ───────────────────────────────────────
 langchain-cohere==0.3.4
 cohere>=5.11.3
 
-# ── Utilities ────────────────────────────────────────────────────
+# ── Utilities ─────────────────────────────────────────────────
 python-dotenv==1.0.1
 pydantic>=2.9.2
