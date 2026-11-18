@@ -78,7 +78,6 @@ embeddings = GoogleGenerativeAIEmbeddings(
 
 llm = ChatGoogleGenerativeAI(
     model="gemini-3.8-flash",
-    temperature=0,
     google_api_key=GOOGLE_API_KEY,
     convert_system_message_to_human=True
 )
