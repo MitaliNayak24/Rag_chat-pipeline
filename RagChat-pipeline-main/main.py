@@ -32,7 +32,10 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from langchain_google_genai import (
+    ChatGoogleGenerativeAI,
+    GoogleGenerativeAIEmbeddings
+)
 from langchain_chroma import Chroma
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
@@ -51,8 +54,8 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 # ── Config (all overridable via environment variables) ─────────────────
-OPENAI_API_KEY   = os.getenv("OPENAI_API_KEY")
-COHERE_API_KEY   = os.getenv("COHERE_API_KEY")           # optional — enables reranking
+GOOGLE_API_KEY   = os.getenv("GOOGLE_API_KEY")
+COHERE_API_KEY   = os.getenv("COHERE_API_KEY")
 CHROMA_PERSIST   = os.getenv("CHROMA_PERSIST_PATH", "./chroma_data")
 PORT             = int(os.getenv("PORT", 8000))
 
@@ -62,25 +65,26 @@ TOP_K_FINAL      = 5    # docs sent to LLM after reranking
 QUERY_VARIATIONS = 3    # number of multi-query variations
 RRF_K            = 60   # RRF constant (higher = less position penalty)
 
-if not OPENAI_API_KEY:
-    raise EnvironmentError("OPENAI_API_KEY is not set. Add it to your .env file.")
+if not GOOGLE_API_KEY:
+    raise EnvironmentError("GOOGLE_API_KEY is not set. Add it to your environment variables.")
 
-# ── LLM + Embedding Models ─────────────────────────────────────────────
-embeddings = OpenAIEmbeddings(
-    model="text-embedding-3-small",
-    api_key=OPENAI_API_KEY
+
+# ── Gemini LLM + Embedding Models ──────────────────────────────────────
+
+embeddings = GoogleGenerativeAIEmbeddings(
+    model="models/gemini-embedding-001",
+    google_api_key=GOOGLE_API_KEY
 )
-llm = ChatOpenAI(
-    model="gpt-4o",
+
+llm = ChatGoogleGenerativeAI(
+    model="gemini-3.8-flash",
     temperature=0,
-    api_key=OPENAI_API_KEY
+    google_api_key=GOOGLE_API_KEY,
+    convert_system_message_to_human=True
 )
-# Use cheaper model for intermediate steps (query rewriting, variation generation)
-llm_mini = ChatOpenAI(
-    model="gpt-4o-mini",
-    temperature=0,
-    api_key=OPENAI_API_KEY
-)
+
+# Reuse Gemini Flash for intermediate tasks
+llm_mini = llm
 
 # ── Text Splitter: 500 tokens / 50 overlap (from file 5) ──────────────
 # Uses tiktoken encoder so chunk_size is actual token count, not chars
@@ -212,7 +216,7 @@ def _build_hybrid_retriever(project_id: str) -> Optional[EnsembleRetriever]:
 def _generate_query_variations(question: str) -> List[str]:
     """
     Generate QUERY_VARIATIONS alternative phrasings of the question.
-    Uses gpt-4o-mini (cheaper) for this intermediate step.
+    Uses Gemini Flash for query variations.
     """
     prompt = (
         f"Generate {QUERY_VARIATIONS} different search queries for this question.\n"
@@ -336,7 +340,7 @@ def _ingest_text(project_id: str, text: str) -> int:
 
 def _ingest_image(project_id: str, file_path: str) -> int:
     """
-    Read image from disk → GPT-4o vision creates a rich searchable description
+   Read image from disk → Gemini Vision creates a rich searchable description
     → embed and store the description in ChromaDB.
     Source: 8_multi_modal_rag.ipynb (create_ai_enhanced_summary)
     """
@@ -352,7 +356,7 @@ def _ingest_image(project_id: str, file_path: str) -> int:
             "png": "image/png", "webp": "image/webp",
             "gif": "image/gif"}.get(ext, "image/jpeg")
 
-    # Ask GPT-4o to produce a thorough searchable description (8_multi_modal_rag pattern)
+    # Ask Gemini Vision to produce a thorough searchable description
     vision_prompt = """You are creating a detailed, searchable description for a document retrieval system.
 
 Analyze this image and produce a comprehensive description covering:
@@ -460,7 +464,7 @@ def _generate_answer(
 ) -> str:
     """
     Generate a grounded answer using retrieved context and conversation history.
-    GPT-4o is instructed to stay within the provided context.
+    Gemini is instructed to stay within the provided context.
     """
     # Build numbered context block (from 3_answer_generation.py pattern)
     context_block = "\n\n".join([
@@ -635,7 +639,7 @@ def ingest(req: IngestRequest):
 def query(req: QueryRequest):
     """
     Receive a question from Spring Boot and return an AI-generated answer.
-    Runs the full RAG pipeline: hybrid search + RRF + reranking + GPT-4o.
+    Runs the full RAG pipeline: hybrid search + RRF + reranking + Gemini.
     Called by RagPipelineClient.query().
     """
     log.info(f"[{req.projectId}] Query: '{req.question[:80]}' | history={len(req.chatHistory)} msgs")
